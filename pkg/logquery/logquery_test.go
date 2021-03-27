@@ -23,3 +23,11 @@ func TestProcessFile(t *testing.T) {
 	_, err := processFile(testFilePath)
 	assert.NoError(err)
 }
+
+func TestProcessFiles(t *testing.T) {
+	testFileMappings := map[string]string{
+		"server1": "../../logs/server1.log",
+		"db":      "../../logs/db_server.log",
+	}
+	_ = processFiles(testFileMappings)
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,17 +43,42 @@ type Queryier interface {
 
 // LogQuery implements Queryier and will process the logs on creation
 type LogQuery struct {
-	processedLogs map[string][]string
+	processedLogs map[string][]*Log
 }
 
 // NewLogQuery return a new LogQuery object
 func NewLogQuery(logMapping map[string]string) (*LogQuery, error) {
-	return &LogQuery{}, nil
+	return &LogQuery{
+		processedLogs: processFiles(logMapping),
+	}, nil
 }
 
 // processLogs processes the logMapping and returns a map of file name to logs
 func processFiles(logMapping map[string]string) map[string][]*Log {
-	return map[string][]*Log{}
+	rv := map[string][]*Log{}
+	wg := sync.WaitGroup{}
+	mutex := sync.Mutex{}
+
+	// Concurrently parse files in different go routines for better efficiency
+	for fileKey, path := range logMapping {
+		// Wait groups help us initiate a bunch of work and then wait for it to finish before returning to execution
+		wg.Add(1)
+		go func(fileKey, path string) {
+			defer wg.Done()
+			logs, err := processFile(path)
+			if err != nil {
+				fmt.Printf("error processing log file %s, %s \n", path, err)
+				return
+			}
+
+			mutex.Lock()
+			defer mutex.Unlock()
+			rv[fileKey] = logs
+		}(fileKey, path)
+	}
+	wg.Wait()
+
+	return rv
 }
 
 // processFile process the logs for an individual file and return an array of logs
