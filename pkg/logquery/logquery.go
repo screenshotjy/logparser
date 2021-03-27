@@ -1,15 +1,30 @@
 package logquery
 
-import "time"
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+	"time"
+)
 
 type LogLevel int
 
 const (
-	Debug LogLevel = iota
+	Undefined LogLevel = iota
+	Debug
 	Info
 	Warn
 	Error
 	Fatal
+
+	// 02/28/2020 5:20:57.45
+	logFormat = "01/02/2006 3:4:5.00"
+)
+
+var (
+	logLineRegex = regexp.MustCompile("(\\[.*\\])(\\[.*\\]) (.*)")
 )
 
 // Single log of a log file
@@ -36,13 +51,69 @@ func NewLogQuery(logMapping map[string]string) (*LogQuery, error) {
 }
 
 // processLogs processes the logMapping and returns a map of file name to logs
-func processLogs(logMapping map[string]string) map[string][]*Log {
+func processFiles(logMapping map[string]string) map[string][]*Log {
 	return map[string][]*Log{}
 }
 
 // processFile process the logs for an individual file and return an array of logs
-func processFile(fileName string) []*Log {
-	return []*Log{}
+func processFile(filePath string) ([]*Log, error) {
+	// Opens a file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	// Creates a scanner that will let us itereate over each line
+	scanner := bufio.NewScanner(file)
+	logs := []*Log{}
+	for scanner.Scan() {
+		log, err := processLine(scanner.Text())
+		if err != nil {
+			continue
+		}
+		logs = append(logs, log)
+	}
+	return logs, nil
+}
+
+// process a single line
+func processLine(rawLog string) (*Log, error) {
+	matches := logLineRegex.FindStringSubmatch(rawLog)
+	if len(matches) != 4 {
+		return nil, fmt.Errorf("log does not have proper structure")
+	}
+
+	// parse time
+	time, err := time.Parse(logFormat, matches[1][1:len(matches[1])-1])
+	if err != nil {
+		return nil, fmt.Errorf("timestamp was not parseable")
+	}
+
+	// parse severity
+	severity := Undefined
+	switch strings.ToLower(matches[2]) {
+	case "[debug]":
+		severity = Debug
+	case "[info]":
+		severity = Info
+	case "[warn]":
+		severity = Warn
+	case "[error]":
+		severity = Error
+	case "[fatal]":
+		severity = Fatal
+	}
+	if severity == Undefined {
+		return nil, fmt.Errorf("severity was not parseable")
+	}
+
+	// return single log
+	return &Log{
+		Time:     time,
+		Severity: severity,
+		Log:      matches[3],
+	}, nil
 }
 
 // Query will get a range of logs from multiple files and interpolates them based on severity
