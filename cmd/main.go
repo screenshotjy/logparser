@@ -19,6 +19,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logQuery.Query(time.Now().Add(-time.Hour*24), 100, []string{"server1", "db_server"}, logquery.Info)
+	s := logQuery.Query(time.Time{}, 100, []string{"server1", "db_server"}, logquery.Info)
+	fmt.Print(s)
 
 }
